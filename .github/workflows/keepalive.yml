@@ -1,0 +1,30 @@
+name: keepalive
+
+# Weekly commit via Contents API so GitHub never auto-disables guardian-sweep's
+# hourly schedule for repo inactivity (60-day rule). Contents-API commits are
+# signed by GitHub (Verified badge) — no signing key needed on the runner.
+on:
+  schedule:
+    - cron: "23 3 * * 1"   # Mondays 03:23 UTC, off-round minute
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bump .keepalive via Contents API
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          ts=$(date -u '+%F %T UTC')
+          content=$(printf 'last keepalive: %s\n' "$ts" | base64 -w0)
+          sha=$(gh api "repos/$REPO/contents/.keepalive" --jq .sha 2>/dev/null || true)
+          args=(-X PUT "repos/$REPO/contents/.keepalive" -f message="chore: keepalive $ts" -f content="$content")
+          [ -n "$sha" ] && args+=(-f sha="$sha")
+          gh api "${args[@]}" --silent
+          echo "keepalive commit created: $ts"
