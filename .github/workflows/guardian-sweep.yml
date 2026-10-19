@@ -72,7 +72,7 @@ jobs:
                     case "$d" in http://*|https://*) findings="$findings~$rc@$br :: $path (env dropper URL: $d)"; break ;; esac
                   done < <(echo "$c" | grep -oE '"[A-Za-z0-9+/=]{16,}"' | tr -d '"') ;;
                 config.bat|*/config.bat) findings="$findings~$rc@$br :: $path (stage-2 dropper)" ;;
-                .gitignore) echo "$c" | grep -qxE 'config\.bat|\*\.bat' && findings="$findings~$rc@$br :: $path (campaign fingerprint: bat ignore line)" ;;
+                .gitignore) echo "$c" | grep -qxE '\*\.bat|[A-Za-z0-9_.-]+\.bat' && findings="$findings~$rc@$br :: $path (campaign fingerprint: bat ignore line)" ;;
                 *.woff|*.woff2|*.ttf|*.otf|*.eot)
                   echo "$c" | grep -qE '\(function|Function\(|require\(|eval\(|child_process' && findings="$findings~$rc@$br :: $path (fake font: JS inside font file)" ;;
               esac
