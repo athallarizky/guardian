@@ -4,7 +4,7 @@ name: guardian-sweep
 # attacker holding a write token on any victim repo cannot disable this by
 # pushing to that repo. Read-only by design: the sweep PAT cannot modify your
 # repos; findings raise an issue here (email notification to watchers).
-# Setup: add repo secret GUARD_PAT = fine-grained PAT, Contents: Read (all repos).
+# Setup: repo secret GUARD_PAT = fine-grained PAT, Contents: Read (all repos).
 
 on:
   schedule:
@@ -34,10 +34,9 @@ jobs:
           set -u
           findings=""
 
-          scan_ref() {  # $1=repo $2=branch  (accumulates into $findings)
-            local repo="$1" br="$2" tree size path c
-            tree=$(GH_TOKEN="$PAT" gh api "repos/$repo/git/trees/$br?recursive=1" \
-                    --jq '.tree[] | select(.type=="blob") | "\(.size)\t\(.path)"' 2>/dev/null) || return 0
+          scan_ref() {  # $1=repo $2=branch  (accumulates into $findings, single-line entries joined by ~)
+            local repo="$1" br="$2" tree size path c v d
+            tree=$(GH_TOKEN="$PAT" gh api "repos/$repo/git/trees/$br?recursive=1" --jq '.tree[] | select(.type=="blob") | "\(.size)\t\(.path)"' 2>/dev/null) || return 0
             while IFS=$'\t' read -r size path; do
               [ -z "${path:-}" ] && continue
               case "$path" in
@@ -49,36 +48,28 @@ jobs:
               c=$(GH_TOKEN="$PAT" gh api "repos/$repo/contents/$path?ref=$br" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null) || continue
               case "$path" in
                 .vscode/tasks.json|*/.vscode/tasks.json)
-                  echo "$c" | grep -q folderOpen && echo "$c" | grep -qE '(node|python|perl|ruby|bash|sh|powershell) ' \
-                    && echo "$c" | grep -qE '\.(woff2?|ttf|otf|eot|svg)' && findings="$findings
-          - $repo@$br :: $path (hidden folderOpen task)" ;;
+                  echo "$c" | grep -q folderOpen && echo "$c" | grep -qE '(node|python|perl|ruby|bash|sh|powershell) ' && echo "$c" | grep -qE '\.(woff2?|ttf|otf|eot|svg)' && findings="$findings~$repo@$br :: $path (hidden folderOpen task)" ;;
                 .vscode/settings.json|*/.vscode/settings.json)
-                  echo "$c" | grep -q '"task.allowAutomaticTasks"[[:space:]]*:[[:space:]]*true' && findings="$findings
-          - $repo@$br :: $path (allowAutomaticTasks)" ;;
+                  echo "$c" | grep -q '"task.allowAutomaticTasks"[[:space:]]*:[[:space:]]*true' && findings="$findings~$repo@$br :: $path (allowAutomaticTasks)" ;;
                 api.js|*/api.js)
-                  echo "$c" | grep -qF '/.{1,2}/g' && echo "$c" | grep -q TextDecoder && findings="$findings
-          - $repo@$br :: $path (obfuscated JS droplet)" ;;
+                  echo "$c" | grep -qF '/.{1,2}/g' && echo "$c" | grep -q TextDecoder && findings="$findings~$repo@$br :: $path (obfuscated JS droplet)" ;;
                 .env|*/.env)
                   while read -r v; do d=$(printf '%s' "$v" | base64 -d 2>/dev/null) || continue
-                    case "$d" in http://*|https://*) findings="$findings
-          - $repo@$br :: $path (env dropper URL: $d)"; break ;; esac
+                    case "$d" in http://*|https://*) findings="$findings~$repo@$br :: $path (env dropper URL: $d)"; break ;; esac
                   done < <(echo "$c" | grep -oE '"[A-Za-z0-9+/=]{16,}"' | tr -d '"') ;;
-                config.bat|*/config.bat) findings="$findings
-          - $repo@$br :: $path (stage-2 dropper)" ;;
-                .gitignore) echo "$c" | grep -qxE 'config\.bat|\*\.bat' && findings="$findings
-          - $repo@$br :: $path (campaign fingerprint: bat ignore line)" ;;
+                config.bat|*/config.bat) findings="$findings~$repo@$br :: $path (stage-2 dropper)" ;;
+                .gitignore) echo "$c" | grep -qxE 'config\.bat|\*\.bat' && findings="$findings~$repo@$br :: $path (campaign fingerprint: bat ignore line)" ;;
                 *.woff|*.woff2|*.ttf|*.otf|*.eot)
-                  echo "$c" | grep -qE '\(function|Function\(|require\(|eval\(|child_process' && findings="$findings
-          - $repo@$br :: $path (fake font: JS inside font file)" ;;
+                  echo "$c" | grep -qE '\(function|Function\(|require\(|eval\(|child_process' && findings="$findings~$repo@$br :: $path (fake font: JS inside font file)" ;;
               esac
             done <<< "$tree"
           }
 
-          targets=$(GH_TOKEN="$PAT" gh api --paginate "user/repos?type=owner&per_page=100" \
-                      --jq '.[] | select(.fork == false) | .full_name' 2>/dev/null)
+          targets=$(GH_TOKEN="$PAT" gh api --paginate "user/repos?type=owner&per_page=100" --jq '.[] | select(.fork == false) | .full_name' 2>/dev/null)
           for org in $ORGS; do
+            orgrepos=$(GH_TOKEN="$PAT" gh api --paginate "orgs/$org/repos?per_page=100" --jq '.[].full_name' 2>/dev/null)
             targets="$targets
-          $(GH_TOKEN="$PAT" gh api --paginate "orgs/$org/repos?per_page=100" --jq '.[].full_name' 2>/dev/null)"
+          $orgrepos"
           done
 
           n=0
@@ -86,26 +77,18 @@ jobs:
             [ -z "$repo" ] && continue
             while read -r br; do
               [ -z "$br" ] && continue
-              scan_ref "$repo" "$br"; n=$((n+1))
+              scan_ref "$repo" "$br"
+              n=$((n+1))
             done < <(GH_TOKEN="$PAT" gh api "repos/$repo/branches?per_page=100" --jq '.[].name' 2>/dev/null)
           done <<< "$targets"
 
           echo "swept $n refs at $(date -u '+%F %T') UTC"
           if [ -n "$findings" ]; then
-            echo "FINDINGS:$findings"
-            GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" \
-              -t "🚨 IOC detected — sweep $(date -u '+%F %H:%M') UTC" \
-              -b "Automated guardian sweep found campaign indicators:
-
-\`\`\`
-$findings
-\`\`\`
-
-Playbook: use the gh-incident-response playbook (scripts/scan-ioc.sh + clean-markers.sh) to verify and clean. Do NOT open these paths in an IDE." \
-              --label "incident" 2>/dev/null \
-              || GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" \
-                   -t "🚨 IOC detected — sweep $(date -u '+%F %H:%M') UTC" \
-                   -b "Findings in run log (label failed): $findings"
+            body=$(printf '%s' "$findings" | tr '~' '\n')
+            echo "FINDINGS:"; echo "$body"
+            msg="Automated guardian sweep found campaign indicators. Verify and clean with the gh-incident-response playbook (scan-ioc.sh + clean-markers.sh; lift rulesets for protected repos). Do NOT open these paths in an IDE."
+            GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" -t "IOC detected - sweep $(date -u '+%F %H:%M') UTC" -b "$(printf '%s\n\n%s' "$msg" "$body")" && exit 1
+            echo "::error::findings detected but issue creation failed - see log above"
             exit 1
           fi
           echo "clean."
