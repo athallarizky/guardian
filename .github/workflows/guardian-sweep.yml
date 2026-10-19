@@ -32,6 +32,10 @@ jobs:
           GUARDIAN: ${{ github.repository }}
         run: |
           set -u
+          if [ -z "${PAT:-}" ]; then
+            echo "::error title=GUARD_PAT kosong::secret GUARD_PAT belum diisi (set ulang: gh secret set GUARD_PAT -R athallarizky/guardian)"
+            exit 1
+          fi
           findings=""
 
           scan_ref() {  # $1=repo $2=branch  (accumulates into $findings, single-line entries joined by ~)
