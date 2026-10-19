@@ -1,8 +1,11 @@
 name: keepalive
 
 # Weekly commit via Contents API so GitHub never auto-disables guardian-sweep's
-# hourly schedule for repo inactivity (60-day rule). Contents-API commits are
-# signed by GitHub (Verified badge) — no signing key needed on the runner.
+# hourly schedule for repo inactivity (60-day rule).
+# NOTE: this Contents-API commit is UNSIGNED by design (REST commits get no
+# GitHub signature — only web-UI edits do). Guardian deliberately has NO
+# required_signatures ruleset; if one is ever added here, this keepalive will
+# be rejected and must be reworked (signing key as secret) first.
 on:
   schedule:
     - cron: "23 3 * * 1"   # Mondays 03:23 UTC, off-round minute
