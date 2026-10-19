@@ -8,7 +8,7 @@ name: guardian-sweep
 
 on:
   schedule:
-    - cron: "23 */2 * * *"  # every 2h (private repo Actions quota)
+    - cron: "17 * * * *"   # hourly (public repo = unlimited Actions minutes)
   workflow_dispatch:
 
 permissions:
@@ -28,6 +28,7 @@ jobs:
       - name: Sweep every branch of every repo for campaign IOCs
         env:
           PAT: ${{ secrets.GUARD_PAT }}
+          SALT: ${{ secrets.GUARD_SALT }}
           ALERT_TOKEN: ${{ github.token }}
           GUARDIAN: ${{ github.repository }}
         run: |
@@ -36,10 +37,19 @@ jobs:
             echo "::error title=GUARD_PAT kosong::secret GUARD_PAT belum diisi (set ulang: gh secret set GUARD_PAT -R athallarizky/guardian)"
             exit 1
           fi
+          if [ -z "${SALT:-}" ]; then
+            echo "::error title=GUARD_SALT kosong::secret GUARD_SALT belum diisi (guardian-map.sh butuh salt yang sama untuk resolve kode)"
+            exit 1
+          fi
+          # repo names are MASKED in all output: alerts show only R-<8hex> =
+          # sha256(full_name + SALT) prefix. Resolve locally: grep the code in
+          # your guardian map (scripts/guardian-map.sh, same salt).
+          code_of() { printf '%s%s' "$1" "$SALT" | sha256sum | cut -c1-8; }
           findings=""
 
           scan_ref() {  # $1=repo $2=branch  (accumulates into $findings, single-line entries joined by ~)
-            local repo="$1" br="$2" tree size path c v d
+            local repo="$1" br="$2" rc tree size path c v d
+            rc="R-$(code_of "$repo")"
             tree=$(GH_TOKEN="$PAT" gh api "repos/$repo/git/trees/$br?recursive=1" --jq '.tree[] | select(.type=="blob") | "\(.size)\t\(.path)"' 2>/dev/null) || return 0
             while IFS=$'\t' read -r size path; do
               [ -z "${path:-}" ] && continue
@@ -52,19 +62,19 @@ jobs:
               c=$(GH_TOKEN="$PAT" gh api "repos/$repo/contents/$path?ref=$br" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null) || continue
               case "$path" in
                 .vscode/tasks.json|*/.vscode/tasks.json)
-                  echo "$c" | grep -q folderOpen && echo "$c" | grep -qE '(node|python|perl|ruby|bash|sh|powershell) ' && echo "$c" | grep -qE '\.(woff2?|ttf|otf|eot|svg)' && findings="$findings~$repo@$br :: $path (hidden folderOpen task)" ;;
+                  echo "$c" | grep -q folderOpen && echo "$c" | grep -qE '(node|python|perl|ruby|bash|sh|powershell) ' && echo "$c" | grep -qE '\.(woff2?|ttf|otf|eot|svg)' && findings="$findings~$rc@$br :: $path (hidden folderOpen task)" ;;
                 .vscode/settings.json|*/.vscode/settings.json)
-                  echo "$c" | grep -q '"task.allowAutomaticTasks"[[:space:]]*:[[:space:]]*true' && findings="$findings~$repo@$br :: $path (allowAutomaticTasks)" ;;
+                  echo "$c" | grep -q '"task.allowAutomaticTasks"[[:space:]]*:[[:space:]]*true' && findings="$findings~$rc@$br :: $path (allowAutomaticTasks)" ;;
                 api.js|*/api.js)
-                  echo "$c" | grep -qF '/.{1,2}/g' && echo "$c" | grep -q TextDecoder && findings="$findings~$repo@$br :: $path (obfuscated JS droplet)" ;;
+                  echo "$c" | grep -qF '/.{1,2}/g' && echo "$c" | grep -q TextDecoder && findings="$findings~$rc@$br :: $path (obfuscated JS droplet)" ;;
                 .env|*/.env)
                   while read -r v; do d=$(printf '%s' "$v" | base64 -d 2>/dev/null) || continue
-                    case "$d" in http://*|https://*) findings="$findings~$repo@$br :: $path (env dropper URL: $d)"; break ;; esac
+                    case "$d" in http://*|https://*) findings="$findings~$rc@$br :: $path (env dropper URL: $d)"; break ;; esac
                   done < <(echo "$c" | grep -oE '"[A-Za-z0-9+/=]{16,}"' | tr -d '"') ;;
-                config.bat|*/config.bat) findings="$findings~$repo@$br :: $path (stage-2 dropper)" ;;
-                .gitignore) echo "$c" | grep -qxE 'config\.bat|\*\.bat' && findings="$findings~$repo@$br :: $path (campaign fingerprint: bat ignore line)" ;;
+                config.bat|*/config.bat) findings="$findings~$rc@$br :: $path (stage-2 dropper)" ;;
+                .gitignore) echo "$c" | grep -qxE 'config\.bat|\*\.bat' && findings="$findings~$rc@$br :: $path (campaign fingerprint: bat ignore line)" ;;
                 *.woff|*.woff2|*.ttf|*.otf|*.eot)
-                  echo "$c" | grep -qE '\(function|Function\(|require\(|eval\(|child_process' && findings="$findings~$repo@$br :: $path (fake font: JS inside font file)" ;;
+                  echo "$c" | grep -qE '\(function|Function\(|require\(|eval\(|child_process' && findings="$findings~$rc@$br :: $path (fake font: JS inside font file)" ;;
               esac
             done <<< "$tree"
           }
@@ -90,7 +100,7 @@ jobs:
           if [ -n "$findings" ]; then
             body=$(printf '%s' "$findings" | tr '~' '\n')
             echo "FINDINGS:"; echo "$body"
-            msg="Automated guardian sweep found campaign indicators. Verify and clean with the gh-incident-response playbook (scan-ioc.sh + clean-markers.sh; lift rulesets for protected repos). Do NOT open these paths in an IDE."
+            msg="Automated guardian sweep found campaign indicators. Repo names are masked as R-codes (salted hash); resolve with: grep R-xxxx ~/.guardian-map.txt Verify and clean with the gh-incident-response playbook (scan-ioc.sh + clean-markers.sh; lift rulesets for protected repos). Do NOT open these paths in an IDE."
             GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" -t "IOC detected - sweep $(date -u '+%F %H:%M') UTC" -b "$(printf '%s\n\n%s' "$msg" "$body")" && exit 1
             echo "::error::findings detected but issue creation failed - see log above"
             exit 1
