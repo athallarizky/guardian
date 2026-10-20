@@ -1,4 +1,6 @@
-# guardian
+<img width="1536" height="1024" alt="guardian" src="https://github.com/user-attachments/assets/b0335014-07b9-40bc-899d-c72958b249f6" />
+
+# Guardian
 
 > Central watchdog that sweeps **every repo I own** (personal, non-fork + [The-Aetheris](https://github.com/The-Aetheris)) every hour for the malware campaign that hit this account — **from outside those repos**, so a stolen write-token on any victim repo cannot disable it.
 
