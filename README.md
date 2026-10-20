@@ -1,4 +1,6 @@
-# guardian
+<img width="1536" height="1024" alt="Wallpaper patung bersayap hitam-putih di tengah dengan latar hitam" src="https://github.com/user-attachments/assets/49af6273-56e5-43eb-922d-55cd8d61438a" />
+
+# Guardian
 
 Central watchdog: an hourly GitHub Actions sweep across **all** repos (personal + configured orgs) hunting for the malware campaign IOCs — from OUTSIDE those repos, so a stolen write-token on any victim repo cannot disable it.
 
