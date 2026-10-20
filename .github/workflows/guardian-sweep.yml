@@ -55,17 +55,13 @@ jobs:
             while IFS=$'\t' read -r size path; do
               [ -z "${path:-}" ] && continue
               case "$path" in
-                .vscode/tasks.json|*/.vscode/tasks.json|.vscode/settings.json|*/.vscode/settings.json) ;;
+                .vscode/*|*/.vscode/*) findings="$findings~$rc@$br :: $path (.vscode on remote - policy: none allowed)"; continue ;;
                 api.js|*/api.js|.env|*/.env|config.bat|*/config.bat|.gitignore|*.config.js|*.config.ts|*.config.mjs|*.config.cjs|*.config.mts|*.config.cts|.eslintrc*|*/.eslintrc*|.prettierrc*|*/.prettierrc*|.postcssrc*|*/.postcssrc*|.babelrc*|*/.babelrc*|.stylelintrc*|*/.stylelintrc*|package.json) ;;
                 *.woff|*.woff2|*.ttf|*.otf|*.eot) [ "${size:-0}" -lt 10240 ] || continue ;;
                 *) continue ;;
               esac
               c=$(GH_TOKEN="$PAT" gh api "repos/$repo/contents/$path?ref=$br" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null) || continue
               case "$path" in
-                .vscode/tasks.json|*/.vscode/tasks.json)
-                  echo "$c" | grep -q folderOpen && echo "$c" | grep -qE '(node|python|perl|ruby|bash|sh|powershell) ' && echo "$c" | grep -qE '\.(woff2?|ttf|otf|eot|svg)' && findings="$findings~$rc@$br :: $path (hidden folderOpen task)" ;;
-                .vscode/settings.json|*/.vscode/settings.json)
-                  echo "$c" | grep -q '"task.allowAutomaticTasks"[[:space:]]*:[[:space:]]*true' && findings="$findings~$rc@$br :: $path (allowAutomaticTasks)" ;;
                 api.js|*/api.js)
                   echo "$c" | grep -qF '/.{1,2}/g' && echo "$c" | grep -q TextDecoder && findings="$findings~$rc@$br :: $path (obfuscated JS droplet)" ;;
                 .env|*/.env)
@@ -110,7 +106,7 @@ jobs:
           if [ -n "$findings" ]; then
             body=$(printf '%s' "$findings" | tr '~' '\n')
             echo "FINDINGS:"; echo "$body"
-            msg="Automated guardian sweep found campaign indicators. Repo names are masked as R-codes (salted hash); resolve with: grep R-xxxx ~/.guardian-map.txt Verify and clean with the gh-incident-response playbook (scan-ioc.sh + clean-markers.sh; lift rulesets for protected repos). Do NOT open these paths in an IDE."
+            msg="Automated guardian sweep found campaign indicators or policy violations (.vscode is banned on remote). Repo names are masked as R-codes (salted hash); resolve with: grep R-xxxx ~/.guardian-map.txt Verify and clean with the gh-incident-response playbook (scan-ioc.sh + clean-markers.sh; lift rulesets for protected repos). Do NOT open these paths in an IDE."
             GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" -t "IOC detected - sweep $(date -u '+%F %H:%M') UTC" -b "$(printf '%s\n\n%s' "$msg" "$body")" && exit 1
             echo "::error::findings detected but issue creation failed - see log above"
             exit 1
