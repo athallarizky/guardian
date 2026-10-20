@@ -55,6 +55,7 @@ If the map is missing/stale, regenerate with `guardian-map.sh` (agent-playbooks 
 - **Never open repo paths in an IDE, never run repo code** — the payload's entire design is auto-execution on open
 - The sweep PAT is read-only by design — guardian can never modify the watched repos; cleanup always happens from the user's authenticated `gh` context
 - Never print secrets, tokens, or the salt; never paste tokens into chats
+- Never ask for or accept the GUARD_SALT value in conversation — it flows password-manager → salt file → script, never through an agent (see "Setup on a new machine")
 - Cleanup commits must be signed (local git already signs) and fast-forward — no history rewrites unless the incident playbook calls for it
 - If dispatches fail on the Worker (`npx wrangler tail` in `guardian-dispatcher/`), suspect this workflow was disabled or the repo tampered with — that is itself a security signal
 
