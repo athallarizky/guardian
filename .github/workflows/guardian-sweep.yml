@@ -9,6 +9,9 @@ name: guardian-sweep
 on:
   schedule:
     - cron: "17 * * * *"   # hourly (public repo = unlimited Actions minutes)
+    - cron: "43 * * * *"   # redundant twin — GitHub drops scheduled runs under
+                           # load (3 of 5 dropped 2026-10-20); two independent
+                           # slots make a silent hour far less likely
   workflow_dispatch:
 
 permissions:
