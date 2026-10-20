@@ -54,7 +54,13 @@ jobs:
           scan_ref() {  # $1=repo $2=branch  (accumulates into $findings, single-line entries joined by ~)
             local repo="$1" br="$2" rc tree size path c v d
             rc="R-$(code_of "$repo")"
-            tree=$(GH_TOKEN="$PAT" gh api "repos/$repo/git/trees/$br?recursive=1" --jq '.tree[] | select(.type=="blob") | "\(.size)\t\(.path)"' 2>/dev/null) || return 0
+            tree=$(GH_TOKEN="$PAT" gh api "repos/$repo/git/trees/$br?recursive=1" --jq '.tree[] | select(.type=="blob") | "\(.size)\t\(.path)"' 2>/dev/null)
+            # gh api prints error bodies (404/403) to STDOUT — a failed fetch
+            # must ALERT, never silently skip the ref (silent skip = blind spot)
+            if [ -z "$tree" ] || printf '%s' "$tree" | grep -q '^{.message'; then
+              findings="$findings~$rc@$br :: SCAN-ERROR (tree fetch failed - deleted repo? rate limit?)"
+              return 0
+            fi
             while IFS=$'\t' read -r size path; do
               [ -z "${path:-}" ] && continue
               case "$path" in
