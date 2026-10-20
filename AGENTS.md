@@ -64,3 +64,18 @@ If the map is missing/stale, regenerate with `guardian-map.sh` (agent-playbooks 
 - R-code map: `~/.guardian-map.txt`
 - Dispatcher: `~/development/personal/guardian-dispatcher/` (logs: `npx wrangler tail`)
 - Repo scope watched: `user/repos` non-fork + `ORGS` env in the workflow (currently The-Aetheris only)
+
+## Setup on a new machine
+
+Two artifacts make triage work — only ONE of them travels:
+
+- `~/.guardian-salt` — the real secret. Installed once **by the user, in their own terminal** (never by an agent, never pasted into any chat):
+  ```bash
+  printf '%s' "<salt from password manager>" > ~/.guardian-salt && chmod 600 ~/.guardian-salt
+  ```
+- `~/.guardian-map.txt` — derived, deterministic, **never synced** (a synced map goes stale as new repos appear). Regenerate whenever:
+  ```bash
+  bash ~/development/personal/agent-playbooks/gh-incident-response/scripts/guardian-map.sh
+  ```
+
+**Agents never need the salt value.** You only need the file to exist. If `guardian-map.sh` reports the salt file missing, ask the user to install it from their password manager — do not accept the salt in conversation. The flow is password-manager → salt file → script; an agent is never a stop on that route.
