@@ -20,7 +20,7 @@ R-<8hex>@<branch> :: <path> (<reason>)
 grep R-xxxxxx ~/.guardian-map.txt        # → athallarizky/<repo>
 ```
 
-If the map is missing/stale, regenerate with `guardian-map.sh` (agent-playbooks `gh-incident-response`) using the same salt as the `GUARD_SALT` secret.
+If the map is missing/stale, regenerate with `guardian-map.sh` (agent-playbooks `guardian-protection`) using the same salt as the `GUARD_SALT` secret.
 
 ## Triage steps
 
@@ -61,7 +61,8 @@ If the map is missing/stale, regenerate with `guardian-map.sh` (agent-playbooks 
 
 ## Quick reference
 
-- Full playbook: `~/development/personal/agent-playbooks/gh-incident-response/SKILL.md`
+- Cleanup playbook: `~/development/personal/agent-playbooks/gh-incident-response/SKILL.md`
+- Protection playbook (rulesets, guardian ops): `~/development/personal/agent-playbooks/guardian-protection/SKILL.md`
 - R-code map: `~/.guardian-map.txt`
 - Dispatcher: `~/development/personal/guardian-dispatcher/` (logs: `npx wrangler tail`)
 - Repo scope watched: `user/repos` non-fork + `ORGS` env in the workflow (currently The-Aetheris only)
@@ -76,7 +77,7 @@ Two artifacts make triage work — only ONE of them travels:
   ```
 - `~/.guardian-map.txt` — derived, deterministic, **never synced** (a synced map goes stale as new repos appear). Regenerate whenever:
   ```bash
-  bash ~/development/personal/agent-playbooks/gh-incident-response/scripts/guardian-map.sh
+  bash ~/development/personal/agent-playbooks/guardian-protection/scripts/guardian-map.sh
   ```
 
 **Agents never need the salt value.** You only need the file to exist. If `guardian-map.sh` reports the salt file missing, ask the user to install it from their password manager — do not accept the salt in conversation. The flow is password-manager → salt file → script; an agent is never a stop on that route.
