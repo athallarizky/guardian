@@ -141,9 +141,7 @@ jobs:
             msg="Automated guardian sweep found campaign indicators or policy violations (.vscode is banned on remote). Repo names are masked as R-codes (salted hash); resolve with: grep R-xxxx ~/.guardian-map.txt Verify and clean with the gh-incident-response playbook (scan-ioc.sh + clean-markers.sh; lift rulesets for protected repos). Do NOT open these paths in an IDE."
             url=$(GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" -t "IOC detected - sweep $(date -u '+%F %H:%M') UTC" -b "$(printf '%s\n\n%s' "$msg" "$body")")
             if [ -n "$url" ]; then
-              notify_tg "🚨 GUARDIAN — campaign indicators / policy violations found. Issue: $url
-
-$body"
+              notify_tg "🚨 GUARDIAN — campaign indicators / policy violations found. Issue: $url — $body"
               exit 1
             fi
             notify_tg "🚨 GUARDIAN — FINDINGS DETECTED but issue creation FAILED. Check Actions logs NOW."
