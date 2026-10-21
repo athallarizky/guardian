@@ -46,6 +46,7 @@ Repo names in alerts are masked as `R-<hash>` (salted); resolve locally via `~/.
 1. Fine-grained PAT — **Contents: Read-only + Metadata: Read-only**, all repositories → `gh secret set GUARD_PAT -R athallarizky/guardian` (never paste tokens into chats)
 2. Any random salt → `gh secret set GUARD_SALT -R athallarizky/guardian`, and regenerate the local map with the same salt (`scripts/guardian-map.sh`)
 3. Dispatcher Worker: see `guardian-dispatcher` (local) — `wrangler login`, PAT (Actions: Write, this repo only) as secret, `wrangler deploy`
+4. Telegram alerts (optional): `TG_BOT_TOKEN` (bot in the target group), `TG_CHAT_ID` (supergroup = `-100…`), `TG_THREAD_ID` (forum topic). Test anytime: run the workflow with `test_notify=true`
 
 ## Self-protection
 
