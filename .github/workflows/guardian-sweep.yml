@@ -148,4 +148,7 @@ jobs:
             echo "::error::findings detected but issue creation failed - see log above"
             exit 1
           fi
+          if [ -z "$findings" ] && [ "$(date -u +%H)" = "15" ]; then
+            notify_tg "✅ GUARDIAN daily digest — last sweep: $n refs, 0 findings ($(date -u '+%F %T') UTC)"
+          fi
           echo "clean."
