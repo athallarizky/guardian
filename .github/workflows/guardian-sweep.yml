@@ -13,6 +13,11 @@ on:
                            # load (3 of 5 dropped 2026-10-20); two independent
                            # slots make a silent hour far less likely
   workflow_dispatch:
+    inputs:
+      test_notify:
+        description: "Kirim test notifikasi Telegram lalu berhenti (uji kanal)"
+        type: boolean
+        default: false
 
 permissions:
   issues: write   # alerting only; no repo contents are ever modified
@@ -34,6 +39,9 @@ jobs:
           SALT: ${{ secrets.GUARD_SALT }}
           ALERT_TOKEN: ${{ github.token }}
           GUARDIAN: ${{ github.repository }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TEST_NOTIFY: ${{ github.event.inputs.test_notify }}
         run: |
           set -u
           set +e   # the runner invokes bash -e; this script handles errors explicitly
@@ -50,6 +58,19 @@ jobs:
           # your guardian map (scripts/guardian-map.sh, same salt).
           code_of() { printf '%s%s' "$1" "$SALT" | sha256sum | cut -c1-8; }
           findings=""
+
+          # Telegram channel — silent (no-op) until TG_BOT_TOKEN/TG_CHAT_ID exist
+          notify_tg() {
+            [ -z "${TG_BOT_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ] && return 0
+            local t="$1"; [ ${#t} -gt 3500 ] && t="${t:0:3500}
+…(truncated — full list in the issue)"
+            curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage"               -d chat_id="${TG_CHAT_ID}" -d text="$t" --max-time 20 >/dev/null || true
+          }
+          if [ "${TEST_NOTIFY:-false}" = "true" ]; then
+            notify_tg "✅ guardian test notification — kanal OK ($(date -u '+%F %T') UTC)"
+            echo "test notification sent (or skipped: secrets empty)."
+            exit 0
+          fi
 
           scan_ref() {  # $1=repo $2=branch  (accumulates into $findings, single-line entries joined by ~)
             local repo="$1" br="$2" rc tree size path c v d
@@ -116,7 +137,14 @@ jobs:
             body=$(printf '%s' "$findings" | tr '~' '\n')
             echo "FINDINGS:"; echo "$body"
             msg="Automated guardian sweep found campaign indicators or policy violations (.vscode is banned on remote). Repo names are masked as R-codes (salted hash); resolve with: grep R-xxxx ~/.guardian-map.txt Verify and clean with the gh-incident-response playbook (scan-ioc.sh + clean-markers.sh; lift rulesets for protected repos). Do NOT open these paths in an IDE."
-            GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" -t "IOC detected - sweep $(date -u '+%F %H:%M') UTC" -b "$(printf '%s\n\n%s' "$msg" "$body")" && exit 1
+            url=$(GH_TOKEN="$ALERT_TOKEN" gh issue create -R "$GUARDIAN" -t "IOC detected - sweep $(date -u '+%F %H:%M') UTC" -b "$(printf '%s\n\n%s' "$msg" "$body")")
+            if [ -n "$url" ]; then
+              notify_tg "🚨 GUARDIAN — campaign indicators / policy violations found. Issue: $url
+
+$body"
+              exit 1
+            fi
+            notify_tg "🚨 GUARDIAN — FINDINGS DETECTED but issue creation FAILED. Check Actions logs NOW."
             echo "::error::findings detected but issue creation failed - see log above"
             exit 1
           fi
