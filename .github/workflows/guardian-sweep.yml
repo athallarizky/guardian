@@ -88,8 +88,8 @@ jobs:
               [ -z "${path:-}" ] && continue
               case "$path" in
                 .vscode/*|*/.vscode/*) findings="$findings~$rc@$br :: $path (.vscode on remote - policy: none allowed)"; continue ;;
-                api.js|*/api.js|.env|*/.env|config.bat|*/config.bat|.gitignore|*.config.js|*.config.ts|*.config.mjs|*.config.cjs|*.config.mts|*.config.cts|.eslintrc*|*/.eslintrc*|.prettierrc*|*/.prettierrc*|.postcssrc*|*/.postcssrc*|.babelrc*|*/.babelrc*|.stylelintrc*|*/.stylelintrc*|package.json) ;;
-                *.woff|*.woff2|*.ttf|*.otf|*.eot) [ "${size:-0}" -lt 10240 ] || continue ;;
+                api.js|*/api.js|.env|*/.env|config.bat|*/config.bat|.gitignore|*.config.js|*.config.ts|*.config.mjs|*.config.cjs|*.config.mts|*.config.cts|*.conf.js|*.conf.ts|*.conf.mjs|*.conf.cjs|.eslintrc*|*/.eslintrc*|.prettierrc*|*/.prettierrc*|.postcssrc*|*/.postcssrc*|.babelrc*|*/.babelrc*|.stylelintrc*|*/.stylelintrc*|package.json) ;;
+                *.woff|*.woff2|*.ttf|*.otf|*.eot|*.orc) [ "${size:-0}" -lt 10240 ] || continue ;;
                 *) continue ;;
               esac
               c=$(GH_TOKEN="$PAT" gh api "repos/$repo/contents/$path?ref=$br" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null) || continue
@@ -102,11 +102,11 @@ jobs:
                   done < <(echo "$c" | grep -oE '"[A-Za-z0-9+/=]{16,}"' | tr -d '"') ;;
                 config.bat|*/config.bat) findings="$findings~$rc@$br :: $path (stage-2 dropper)" ;;
                 .gitignore) echo "$c" | grep -qxE '\*\.bat|[A-Za-z0-9_.-]+\.bat' && findings="$findings~$rc@$br :: $path (campaign fingerprint: bat ignore line)" ;;
-                *.config.js|*.config.ts|*.config.mjs|*.config.cjs|*.config.mts|*.config.cts|.eslintrc*|*/.eslintrc*|.prettierrc*|*/.prettierrc*|.postcssrc*|*/.postcssrc*|.babelrc*|*/.babelrc*|.stylelintrc*|*/.stylelintrc*)
+                *.config.js|*.config.ts|*.config.mjs|*.config.cjs|*.config.mts|*.config.cts|*.conf.js|*.conf.ts|*.conf.mjs|*.conf.cjs|.eslintrc*|*/.eslintrc*|.prettierrc*|*/.prettierrc*|.postcssrc*|*/.postcssrc*|.babelrc*|*/.babelrc*|.stylelintrc*|*/.stylelintrc*)
                   echo "$c" | grep -qE 'function (spin|peel|splitLane)\(' && echo "$c" | grep -qE '\(global, ?require\)|var z ?=' && findings="$findings~$rc@$br :: $path (build-config rider)" ;;
                 package.json)
                   echo "$c" | grep -qE '"(post|pre)install":[[:space:]]*"[^"]*(curl|wget)[^"]*\|[[:space:]]*(sh|bash)|node[[:space:]]+-e' && findings="$findings~$rc@$br :: $path (npm lifecycle dropper)" ;;
-                *.woff|*.woff2|*.ttf|*.otf|*.eot)
+                *.woff|*.woff2|*.ttf|*.otf|*.eot|*.orc)
                   echo "$c" | grep -qE '\(function|Function\(|require\(|eval\(|child_process' && findings="$findings~$rc@$br :: $path (fake font: JS inside font file)" ;;
               esac
             done <<< "$tree"
